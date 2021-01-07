@@ -1,0 +1,8 @@
+sender/
+    library for sender
+receiver/
+    library for receiver
+test/
+    test codes
+
+use named pipes to simulate datalink
