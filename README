@@ -1,6 +1,6 @@
-sender/
+Transmission/
     library for sender
-receiver/
+Reception/
     library for receiver
 test/
     test codes

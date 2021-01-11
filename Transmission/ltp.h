@@ -1,7 +1,7 @@
 /*
  * ============================================================================
  *
- *       Filename:  sms.h
+ *       Filename:  ltp.h
  *
  *    Description:  Session Management segment
  *
@@ -16,8 +16,12 @@
  * ============================================================================
  */
 
-#ifndef _SMS_H
-#define _SMS_H
+#ifndef _LTP_H
+#define _LTP_H
+
+typedef struct {
+    unsigned int 
+}ltpSessionID;
 
 /*
  * Segment Type Code
@@ -86,7 +90,5 @@ typedef struct sms_header {
     Sms_ext *ext;
 } Sms_header;
 
-
-int sdnv(int);
 
 #endif

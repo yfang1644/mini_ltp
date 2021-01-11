@@ -1,7 +1,7 @@
 /*
  * ============================================================================
  *
- *       Filename:  sdnv_encoding.c
+ *       Filename:  sdnv.c
  *
  *    Description:  Self-Delimiting Numeric Value (SDNV)
  *
@@ -16,11 +16,10 @@
  * ============================================================================
  */
 
-int sdnv(unsigned int val)
+void encodeSdnv(unsigned char *result, unsigned int val)
 {
     unsigned char buf[8];   /* limited to maximum 8 bytes */
     unsigned char t;
-    unsigned int result = 0;
     int i, j;
 
     for (i = 0; i < 8; i++)
@@ -34,12 +33,31 @@ int sdnv(unsigned int val)
         }
     }
 
-    for (j = 0; j <= i; j++)
+    for (j = i; j > 0; j--)
     {
-        result |= buf[j] << (j*8);
+        *result++ = buf[j];
     }
 
-    result &= ~0x80;    /* MSB of the last byte should be 0 */
+    *result = (buf[j] & 0x7f);  /* MSB of the last byte should be 0 */
+}
 
-    return result;
+unsigned int decodeSdnv(unsigned char *sdnv)
+{
+    unsigned int val = 0;
+    int i;
+    unsigned char t;
+
+    for(i = 0; i < 5; i++)
+    {
+        val <<= 7;
+        t = *sdnv++;
+        val |= t & 0x7f;
+        t &= 0x80;
+        if (t == 0)
+        {
+            break;
+        }
+    }
+
+    return val;
 }
