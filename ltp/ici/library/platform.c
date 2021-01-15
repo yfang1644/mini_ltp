@@ -15,17 +15,6 @@
 
 #define	ABORT_AS_REQD		if (_coreFileNeeded(NULL)) sm_Abort()
 
-#if defined (darwin) || defined (freebsd) || defined (mingw)
-
-void	*memalign(size_t boundary, size_t size)
-{
-	return malloc(size);
-}
-
-#endif
-
-#ifdef _MULTITHREADED
-
 typedef struct rlock_str
 {
 	pthread_mutex_t	semaphore;
@@ -111,37 +100,13 @@ void	unlockResource(ResourceLock *rl)
 	}
 }
 
-#else	/*	Only one thread of control in address space.		*/
-
-int	initResourceLock(ResourceLock *rl)
-{
-	return 0;
-}
-
-void	killResourceLock(ResourceLock *rl)
-{
-	return;
-}
-
-void	lockResource(ResourceLock *rl)
-{
-	return;
-}
-
-void	unlockResource(ResourceLock *rl)
-{
-	return;
-}
-
-#endif	/*	end #ifdef _MULTITHREADED				*/
-
 void	snooze(unsigned int seconds)
 {
 	struct timespec	ts;
 
 	ts.tv_sec = seconds;
 	ts.tv_nsec = 0;
-	oK(nanosleep(&ts, NULL));
+	nanosleep(&ts, NULL);
 }
 
 void	microsnooze(unsigned int usec)
@@ -150,14 +115,13 @@ void	microsnooze(unsigned int usec)
 
 	ts.tv_sec = usec / 1000000;
 	ts.tv_nsec = (usec % 1000000) * 1000;
-	oK(nanosleep(&ts, NULL));
+	nanosleep(&ts, NULL);
 }
-
 
 void	getCurrentTime(struct timeval *tvp)
 {
 	CHKVOID(tvp);
-	oK(gettimeofday(tvp, NULL));
+	gettimeofday(tvp, NULL);
 }
 
 char	*system_error_msg()
@@ -184,8 +148,6 @@ char	*getNameOfUser(char *buffer)
 	return "";
 }
 
-#ifdef ION_NO_DNS
-#else
 unsigned int	getInternetAddress(char *hostName)
 {
 	struct hostent	*hostInfo;
@@ -259,7 +221,6 @@ int	reUseAddress(int fd)
 
 	return result;
 }
-#endif	/*	ION_NO_DNS						*/
  
 /******************* platform-independent functions *********************/
 
@@ -293,8 +254,8 @@ void	*acquireSystemMemory(size_t size)
 
 static void	watchToStdout(char token)
 {
-	oK(putchar(token));
-	oK(fflush(stdout));
+	putchar(token);
+	fflush(stdout);
 }
 
 static Watcher	_watchOneEvent(Watcher *watchFunction)
@@ -1968,9 +1929,6 @@ char	*istrcat(char *buffer, char *from, size_t bufSize)
 
 char	*igetcwd(char *buf, size_t size)
 {
-#ifdef FSWWDNAME
-#include "wdname.c"
-#else
 	char	*cwdName;
 
 	CHKNULL(buf);
@@ -1982,7 +1940,6 @@ char	*igetcwd(char *buf, size_t size)
 	}
 
 	return cwdName;
-#endif
 }
 
 #ifdef POSIX_TASKS

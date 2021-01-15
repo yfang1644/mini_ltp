@@ -322,15 +322,6 @@ actual name.", map->name);
 	return 0;
 }
 
-char	*psm_name(PsmPartition partition)
-{
-	PartitionMap	*map;
-
-	CHKNULL(partition);
-	map = (PartitionMap *) (partition->space);
-	return map->name;
-}
-
 char	*psm_space(PsmPartition partition)
 {
 	CHKNULL(partition);
@@ -378,28 +369,6 @@ PsmAddress	psa(PsmPartition partition, void *pointer)
 {
 	CHKZERO(partition);
 	return (((char *) pointer) - (partition->space));
-}
-
-void	psm_panic(PsmPartition partition)
-{
-	PartitionMap	*map;
-
-	CHKVOID(partition);
-	map = (PartitionMap *) (partition->space);
-	lockPartition(map);
-	map->desperate = 1;
-	unlockPartition(map);
-}
-
-void	psm_relax(PsmPartition partition)
-{
-	PartitionMap	*map;
-
-	CHKVOID(partition);
-	map = (PartitionMap *) (partition->space);
-	lockPartition(map);
-	map->desperate = 0;
-	unlockPartition(map);
 }
 
 int	psm_set_root(PsmPartition partition, PsmAddress root)

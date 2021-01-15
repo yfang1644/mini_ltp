@@ -98,17 +98,6 @@ extern PsmAddress	psa(PsmPartition, void *);
 				Returns the conversion of that pointer
 				into an offset within the partition.	*/
 
-extern void		psm_panic(PsmPartition);
-			/*	Forces standard memory allocation
-				algorithm to hunt laboriously for
-				free blocks in pools that may not
-				contain any.				*/
-
-extern void		psm_relax(PsmPartition);
-			/*	Reverses psm_panic.  Lets standard
-				memory allocation algorithm return NULL
-				when no free block can be found easily.	*/
-
 #define psm_malloc(partition, size) \
 Psm_malloc(__FILE__, __LINE__, partition, size)
 

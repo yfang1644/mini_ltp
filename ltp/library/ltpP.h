@@ -614,8 +614,6 @@ typedef struct
 } LtpVdb;
 
 int		ltpInit(int estMaxExportSessions);
-void		ltpDropVdb();
-void		ltpRaiseVdb();
 int		ltpStart();
 void		ltpStop();
 int		ltpAttach();

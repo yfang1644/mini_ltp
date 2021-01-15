@@ -588,106 +588,6 @@ static int	checkNodeListParms(IonParms *parms, char *wdName, uvast nodeNbr)
 	return 0;
 }
 
-
-static void	destroyIonNode(PsmPartition partition, PsmAddress eltData,
-			void *argument)
-{
-	IonNode	*node = (IonNode *) psp(partition, eltData);
-
-	sm_list_destroy(partition, node->embargoes, rfx_erase_data, NULL);
-	psm_free(partition, eltData);
-}
-
-static void	destroyNeighbor(PsmPartition partition, PsmAddress nodeData,
-		void *argument)
-{
-	psm_free(partition, nodeData);
-}
-
-static void	dropVdb(PsmPartition wm, PsmAddress vdbAddress)
-{
-	IonVdb		*vdb;
-	int		i;
-	PsmAddress	elt;
-	PsmAddress	nextElt;
-	PsmAddress	addr;
-	Requisition	*req;
-
-	vdb = (IonVdb *) psp(wm, vdbAddress);
-
-	/*	Time-ordered list of probes can simply be destroyed.	*/
-
-	sm_list_destroy(wm, vdb->probes, rfx_erase_data, NULL);
-
-	/*	Three of the red-black tables in the Vdb are
-	 *	emptied and recreated by rfx_stop().  Destroy them.	*/
-
-	sm_rbt_destroy(wm, vdb->contactIndex, NULL, NULL);
-	sm_rbt_destroy(wm, vdb->rangeIndex, NULL, NULL);
-	sm_rbt_destroy(wm, vdb->timeline, NULL, NULL);
-
-	/*	cgr_stop clears all routing objects, so nodes and
-	 *	neighbors themselves can now be deleted.		*/
-
-	sm_rbt_destroy(wm, vdb->nodes, destroyIonNode, NULL);
-	sm_rbt_destroy(wm, vdb->neighbors, destroyNeighbor, NULL);
-
-	/*	Safely shut down the ZCO flow control system.		*/
-
-	for (i = 0; i < 1; i++)
-	{
-		for (elt = sm_list_first(wm, vdb->requisitions[i]); elt;
-				elt = nextElt)
-		{
-			nextElt = sm_list_next(wm, elt);
-			addr = sm_list_data(wm, elt);
-			req = (Requisition *) psp(wm, addr);
-			sm_SemEnd(req->semaphore);
-			psm_free(wm, addr);
-			sm_list_delete(wm, elt, NULL, NULL);
-		}
-	}
-
-	zco_unregister_callback();
-}
-
-void	ionDropVdb()
-{
-	PsmPartition	wm = getIonwm();
-	char		*ionvdbName = "ionvdb";
-	PsmAddress	vdbAddress;
-	PsmAddress	elt;
-	char		*stop = NULL;
-
-	if (psm_locate(wm, ionvdbName, &vdbAddress, &elt) < 0)
-	{
-		putErrmsg("Failed searching for vdb.", NULL);
-		return;
-	}
-
-	if (elt)
-	{
-		dropVdb(wm, vdbAddress);	/*	Destroy Vdb.	*/
-		psm_free(wm, vdbAddress);
-		if (psm_uncatlg(wm, ionvdbName) < 0)
-		{
-			putErrmsg("Failed uncataloging vdb.", NULL);
-		}
-	}
-
-	oK(_ionvdb(&stop));			/*	Forget old Vdb.	*/
-}
-
-void	ionRaiseVdb()				/*	For ionrestart.	*/
-{
-	char	*ionvdbName = "ionvdb";
-
-	if (_ionvdb(&ionvdbName) == NULL)	/*	Create new Vdb.	*/
-	{
-		putErrmsg("ION can't reinitialize vdb.", NULL);
-	}
-}
-
 int	ionAttach()
 {
 	Sdr		ionsdr = _ionsdr(NULL);
@@ -801,12 +701,6 @@ int	ionAttach()
 
 void	ionDetach()
 {
-#if defined (ION_LWT)
-#ifdef RTEMS
-	sm_TaskForget(sm_TaskIdSelf());
-#endif
-	return;
-#else	/*	Not ION_LWT, so can detach entire process.		*/
 	Sdr	ionsdr = _ionsdr(NULL);
 
 	if (ionsdr)
@@ -815,7 +709,6 @@ void	ionDetach()
 		ionsdr = NULL;		/*	To reset to NULL.	*/
 		oK(_ionsdr(&ionsdr));
 	}
-#endif	/*	end of #ifdef ION_LWT					*/
 }
 
 void	ionProd(uvast fromNode, uvast toNode, unsigned int xmitRate,

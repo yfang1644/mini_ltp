@@ -127,35 +127,6 @@ extern Object	zco_create_file_ref(Sdr sdr,
 			 *	file reference object on success, 0
 			 *	on any error.				*/
 
-extern int	zco_revise_file_ref(Sdr sdr,
-				Object fileRef,
-				char *pathName,
-				char *cleanupScript);
-			/*	Changes the pathName and cleanupScript
-			 *	of the indicated file reference.  The
-			 *	new values of these fields are validated
-			 *	as for zco_create_file_ref.  Returns 0
-			 *	on success, -1 on any error.		*/
-
-extern char	*zco_file_ref_path(Sdr sdr,
-				Object fileRef,
-				char *buffer,
-				int buflen);
-			/*	Returns the NULL-terminated pathName
-			 *	associated with the indicated file
-			 *	reference, stored in buffer and
-			 *	truncated to buflen as necessary.
-			 *	Returns NULL on any error.		*/
-
-extern int	zco_file_ref_xmit_eof(Sdr sdr,
-				Object fileRef);
-			/*	Returns 1 if the last octet of the
-			 *	referenced file (as determined at the
-			 *	time the file reference object was
-			 *	created) has been read by ZCO via a
-			 *	reader with file offset tracking
-			 *	turned on.  Otherwise returns zero.	*/
-
 extern void	zco_destroy_file_ref(Sdr sdr,
 				Object fileRef);
 			/*	If file reference is no longer in use
@@ -260,13 +231,6 @@ extern vast	zco_get_max_heap_occupancy(Sdr sdr,
 			/*	Returns the maximum number of SDR
 			 *	heap space bytes that may be
 			 *	occupied by ZCOs in this SDR.		*/
-
-extern int	zco_enough_heap_space(Sdr sdr,
-				vast length,
-				ZcoAcct acct);
-			/*	Returns 1 if the total remaining SDR
-			 *	heap space available for ZCOs is
-			 *	greater than length, 0 otherwise.	*/
 
 extern int	zco_extent_too_large(Sdr sdr,
 				ZcoMedium sourceMedium,

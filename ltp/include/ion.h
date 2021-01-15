@@ -328,8 +328,6 @@ extern void		releaseToIonMemory(const char *, int, void *);
 extern void		*ionMemAtoP(uaddr);
 extern uaddr		ionMemPtoA(void *);
 
-extern int		ionInitialize(	IonParms *parms,
-					uvast ownNodeNbr);
 extern int		ionAttach();
 extern void		ionDetach();
 extern void		ionProd(	uvast fromNode,

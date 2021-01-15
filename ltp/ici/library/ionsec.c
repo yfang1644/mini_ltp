@@ -250,7 +250,6 @@ static SecVdb	*_secvdb(char **name)
 	return vdb;
 }
 
-
 int	secAttach()
 {
 	Sdr	ionsdr;

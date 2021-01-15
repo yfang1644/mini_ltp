@@ -18,7 +18,9 @@
 #define ZCODEBUG	0
 #endif
 
+#if ZCODEBUG
 static const char	*bookNames[] = { "inbound", "outbound" };
+#endif
 
 /*	The INBOUND and OUTBOUND "books" control ZCOs' occupancy of
  *	SDR heap, bulk storage, and file system space.  Inbound and
@@ -156,11 +158,6 @@ typedef struct
 	unsigned char	provisional;		/*	Boolean		*/
 } Zco;
 
-static char	*_badArgsMemo()
-{
-	return "Missing/invalid argument(s).";
-}
-
 static Object	getZcoDB(Sdr sdr)
 {
 	static Object	obj = 0;
@@ -195,40 +192,6 @@ static Object	getZcoDB(Sdr sdr)
 	}
 
 	return obj;
-}
-
-void	zco_status(Sdr sdr)
-{
-	Object		obj;
-			OBJ_POINTER(ZcoDB, db);
-	int		i;
-	ZcoBook		*book;
-	char		buffer[128];
-
-	CHKVOID(sdr);
-	obj = getZcoDB(sdr);
-	if (obj == 0)
-	{
-		writeMemo("[?] No ZCO database to print.");
-		return;
-	}
-
-	GET_OBJ_POINTER(sdr, ZcoDB, db, obj);
-	for (i = 0, book = db->books; i < 2; i++, book++)
-	{
-		isprintf(buffer, sizeof buffer, "[i] %s file  current: "
-VAST_FIELDSPEC "  max: " VAST_FIELDSPEC, bookNames[i], book->fileOccupancy,
-				book->maxFileOccupancy);
-		writeMemo(buffer);
-		isprintf(buffer, sizeof buffer, "[i] %s bulk  current: "
-VAST_FIELDSPEC "  max: " VAST_FIELDSPEC, bookNames[i], book->bulkOccupancy,
-				book->maxBulkOccupancy);
-		writeMemo(buffer);
-		isprintf(buffer, sizeof buffer, "[i] %s heap  current: "
-VAST_FIELDSPEC "  max: " VAST_FIELDSPEC, bookNames[i], book->heapOccupancy,
-				book->maxHeapOccupancy);
-		writeMemo(buffer);
-	}
 }
 
 static void	_zcoCallback(ZcoCallback *newCallback, ZcoAcct acct)
@@ -622,32 +585,6 @@ vast	zco_get_max_heap_occupancy(Sdr sdr, ZcoAcct acct)
 	}
 }
 
-int	zco_enough_heap_space(Sdr sdr, vast length, ZcoAcct acct)
-{
-	Object	obj;
-		OBJ_POINTER(ZcoDB, db);
-	ZcoBook	*book;
-	vast	increment;
-
-	CHKZERO(sdr);
-	CHKZERO(length >= 0);
-	obj = getZcoDB(sdr);
-	if (obj == 0)
-	{
-		return 0;
-	}
-
-	GET_OBJ_POINTER(sdr, ZcoDB, db, obj);
-	book = &(db->books[((int) acct)]);
-	increment = book->heapOccupancy + length;
-	if (increment < 0)		/*	Overflow.		*/
-	{
-		return 0;
-	}
-
-	return (book->maxHeapOccupancy - increment) > 0;
-}
-
 Object	zco_create_file_ref(Sdr sdr, char *pathName, char *cleanupScript,
 		 ZcoAcct acct)
 {
@@ -676,7 +613,7 @@ Object	zco_create_file_ref(Sdr sdr, char *pathName, char *cleanupScript,
 
 	if (scriptLen > 255 || pathLen < 1 || pathLen > 255)
 	{
-		putErrmsg(_badArgsMemo(), NULL);
+		putErrmsg("Missing/invalid argument(s).", NULL);
 		return 0;
 	}
 
@@ -729,105 +666,6 @@ Object	zco_create_file_ref(Sdr sdr, char *pathName, char *cleanupScript,
 
 	sdr_write(sdr, fileRefObj, (char *) &fileRef, sizeof(FileRef));
 	return fileRefObj;
-}
-
-int	zco_revise_file_ref(Sdr sdr, Object fileRefObj, char *pathName,
-		char *cleanupScript)
-{
-	int		pathLen;
-	char		pathBuf[256];
-	int		scriptLen = 0;
-	int		sourceFd;
-	struct stat	statbuf;
-	FileRef		fileRef;
-
-	CHKERR(sdr);
-	CHKERR(fileRefObj);
-	CHKERR(pathName);
-	CHKERR(sdr_in_xn(sdr));
-	if (qualifyFileName(pathName, pathBuf, sizeof pathBuf) < 0)
-	{
-		writeMemoNote("[?] Can't qualify file name of revised ZCO ref.",
-				pathName);
-		return 0;
-	}
-
-	pathName = pathBuf;
-	pathLen = istrlen(pathName, sizeof pathBuf);
-	if (cleanupScript)
-	{
-		scriptLen = strlen(cleanupScript);
-	}
-
-	if (scriptLen > 255 || pathLen < 1 || pathLen > 255)
-	{
-		putErrmsg(_badArgsMemo(), NULL);
-		return -1;
-	}
-
-	sourceFd = open(pathName, O_RDONLY, 0);
-	if (sourceFd == -1)
-	{
-		putSysErrmsg("Can't open source file", pathName);
-		return -1;
-	}
-
-	if (fstat(sourceFd, &statbuf) < 0)
-	{
-		putSysErrmsg("Can't stat source file", pathName);
-		close(sourceFd);
-		return 0;
-	}
-
-	/*	Parameters verified.  Proceed with FileRef revision.	*/
-
-	close(sourceFd);
-	sdr_stage(sdr, (char *) &fileRef, fileRefObj, sizeof(FileRef));
-	fileRef.inode = statbuf.st_ino;
-	memcpy(fileRef.pathName, pathName, pathLen);
-	fileRef.pathName[pathLen] = '\0';
-	if (cleanupScript)
-	{
-		if (scriptLen == 0)
-		{
-			fileRef.unlinkOnDestroy = 1;
-		}
-		else
-		{
-			fileRef.unlinkOnDestroy = 0;
-			memcpy(fileRef.cleanupScript, cleanupScript, scriptLen);
-		}
-	}
-	else
-	{
-		fileRef.unlinkOnDestroy = 0;
-	}
-
-	fileRef.cleanupScript[scriptLen] = '\0';
-	sdr_write(sdr, fileRefObj, (char *) &fileRef, sizeof(FileRef));
-	return 0;
-}
-
-char	*zco_file_ref_path(Sdr sdr, Object fileRefObj, char *buffer, int buflen)
-{
-	OBJ_POINTER(FileRef, fileRef);
-
-	CHKNULL(sdr);
-	CHKNULL(fileRefObj);
-	CHKNULL(buffer);
-	CHKNULL(buflen > 0);
-	GET_OBJ_POINTER(sdr, FileRef, fileRef, fileRefObj);
-	return istrcpy(buffer, fileRef->pathName, buflen);
-}
-
-int	zco_file_ref_xmit_eof(Sdr sdr, Object fileRefObj)
-{
-	OBJ_POINTER(FileRef, fileRef);
-
-	CHKZERO(sdr);
-	CHKZERO(fileRefObj);
-	GET_OBJ_POINTER(sdr, FileRef, fileRef, fileRefObj);
-	return (fileRef->xmitProgress == fileRef->fileLength);
 }
 
 static void	destroyFileReference(Sdr sdr, FileRef *fileRef,
