@@ -50,12 +50,6 @@ extern int		Sm_list_destroy(const char *file, int line,
 				PsmPartition partition, PsmAddress list,
 				SmListDeleteFn deleteFn, void *argument);
 
-extern PsmAddress	sm_list_user_data(PsmPartition partition,
-				PsmAddress list);
-extern int		sm_list_user_data_set(PsmPartition partition,
-				PsmAddress list, PsmAddress userData);
-extern int		sm_list_length(PsmPartition partition, PsmAddress list);
-
 #define sm_list_insert(partition, list, data, fn, arg) \
 Sm_list_insert(__FILE__, __LINE__, partition, list, data, fn, arg)
 extern PsmAddress	Sm_list_insert(const char *file, int line,
@@ -93,14 +87,10 @@ extern int		Sm_list_delete(const char *file, int line,
 extern PsmAddress	sm_list_first(PsmPartition partition, PsmAddress list);
 extern PsmAddress	sm_list_last(PsmPartition partition, PsmAddress list);
 extern PsmAddress	sm_list_next(PsmPartition partition, PsmAddress elt);
-extern PsmAddress	sm_list_prev(PsmPartition partition, PsmAddress elt);
-extern PsmAddress	sm_list_search(PsmPartition partition, PsmAddress elt,
-				SmListCompareFn compare, void *dataBuffer);
+extern PsmAddress   sm_list_prev(PsmPartition partition, PsmAddress elt);
 
-extern PsmAddress	sm_list_list(PsmPartition partition, PsmAddress elt);
 extern PsmAddress	sm_list_data(PsmPartition partition, PsmAddress elt);
-extern PsmAddress	sm_list_data_set(PsmPartition partition, PsmAddress elt,
-				PsmAddress data);
+
 #ifdef __cplusplus
 }
 #endif

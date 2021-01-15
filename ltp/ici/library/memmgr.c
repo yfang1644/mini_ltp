@@ -266,32 +266,6 @@ MemDeallocator	memmgr_release(int mgrId)
 	return mgr->release;
 }
 
-MemAtoPConverter memmgr_AtoP(int mgrId)
-{
-	MemManager	*mgr;
-
-	CHKNULL(mgrId >= 0);
-	if (_mem_mgrs(mgrId, NULL, NULL, NULL, NULL, NULL, &mgr) < 0)
-	{
-		return NULL;
-	}
-
-	return mgr->AtoP;
-}
-
-MemPtoAConverter memmgr_PtoA(int mgrId)
-{
-	MemManager	*mgr;
-
-	CHKNULL(mgrId >= 0);
-	if (_mem_mgrs(mgrId, NULL, NULL, NULL, NULL, NULL, &mgr) < 0)
-	{
-		return NULL;
-	}
-
-	return mgr->PtoA;
-}
-
 int	memmgr_open(int memKey, long memSize, char **memPtr, uaddr *smId,
 		char *partitionName, PsmPartition *partition,
 		int *memMgr, MemAllocator afn, MemDeallocator ffn,

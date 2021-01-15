@@ -25,7 +25,6 @@
 #define timestampInFormat	"%4d/%2d/%2d-%2d:%2d:%2d"
 #define timestampOutFormat	"%.4d/%.2d/%.2d-%.2d:%.2d:%.2d"
 
-extern void	sdr_eject_xn(Sdr);
 static void	ionProvideZcoSpace(ZcoAcct acct);
 
 /*	*	*	Datatbase access	 *	*	*	*/
@@ -589,196 +588,6 @@ static int	checkNodeListParms(IonParms *parms, char *wdName, uvast nodeNbr)
 	return 0;
 }
 
-#ifdef mingw
-static DWORD WINAPI	waitForSigterm(LPVOID parm)
-{
-	DWORD	processId;
-	char	eventName[32];
-	HANDLE	event;
-
-	processId = GetCurrentProcessId();
-	sprintf(eventName, "%u.sigterm", (unsigned int) processId);
-	event = CreateEvent(NULL, FALSE, FALSE, eventName);
-	if (event == NULL)
-	{
-		putErrmsg("Can't create sigterm event.", utoa(GetLastError()));
-		return 0;
-	}
-
-	oK(WaitForSingleObject(event, INFINITE));
-	raise(SIGTERM);
-	CloseHandle(event);
-	return 0;
-}
-#endif
-
-int	ionInitialize(IonParms *parms, uvast ownNodeNbr)
-{
-	char		wdname[256];
-	Sdr		ionsdr;
-	Object		iondbObject;
-	IonDB		iondbBuf;
-	vast		limit;
-	sm_WmParms	ionwmParms;
-	char		*ionvdbName = "ionvdb";
-	ZcoCallback	notify = ionProvideZcoSpace;
-
-	CHKERR(parms);
-	CHKERR(ownNodeNbr);
-#ifdef mingw
-	if (_winsock(0) < 0)
-	{
-		return -1;
-	}
-#endif
-	if (igetcwd(wdname, 256) == NULL)
-	{
-		putErrmsg("Can't get cwd name.", NULL);
-		return -1;
-	}
-
-	if (parms->sdrWmSize <= 0)
-	{
-		parms->sdrWmSize = 1000000;	/*	Default.	*/
-	}
-
-	if (checkNodeListParms(parms, wdname, ownNodeNbr) < 0)
-	{
-		putErrmsg("Failed checking node list parms.", NULL);
-		return -1;
-	}
-
-	if (sdr_initialize(parms->sdrWmSize, NULL, SM_NO_KEY, NULL) < 0)
-	{
-		putErrmsg("Can't initialize the SDR system.", NULL);
-		return -1;
-	}
-
-	if (sdr_load_profile(parms->sdrName, parms->configFlags,
-			parms->heapWords, parms->heapKey, parms->logSize,
-			parms->logKey, parms->pathName, "ionrestart") < 0)
-	{
-		putErrmsg("Unable to load SDR profile for ION.", NULL);
-		return -1;
-	}
-
-	ionsdr = sdr_start_using(parms->sdrName);
-	if (ionsdr == NULL)
-	{
-		putErrmsg("Can't start using SDR for ION.", NULL);
-		return -1;
-	}
-
-	ionsdr = _ionsdr(&ionsdr);
-
-	/*	Recover the ION database, creating it if necessary.	*/
-
-	CHKERR(sdr_begin_xn(ionsdr));
-	iondbObject = sdr_find(ionsdr, "iondb", NULL);
-	switch (iondbObject)
-	{
-	case -1:		/*	SDR error.			*/
-		sdr_cancel_xn(ionsdr);
-		putErrmsg("Can't seek ION database in SDR.", NULL);
-		return -1;
-
-	case 0:			/*	Not found; must create new DB.	*/
-		if (ownNodeNbr == 0)
-		{
-			sdr_cancel_xn(ionsdr);
-			putErrmsg("Must supply non-zero node number.", NULL);
-			return -1;
-		}
-
-		memset((char *) &iondbBuf, 0, sizeof(IonDB));
-		memcpy(iondbBuf.workingDirectoryName, wdname, 256);
-		iondbBuf.ownNodeNbr = ownNodeNbr;
-		iondbBuf.productionRate = -1;	/*	Unknown.	*/
-		iondbBuf.consumptionRate = -1;	/*	Unknown.	*/
-		limit = (sdr_heap_size(ionsdr) / 100) * (100 - ION_SEQUESTERED);
-
-		/*	By default, let outbound ZCOs occupy up to
-		 *	half of the available heap space, leaving
-		 *	the other half for inbound ZCO acquisition.	*/
-
-		zco_set_max_heap_occupancy(ionsdr, limit/2, ZcoInbound);
-		zco_set_max_heap_occupancy(ionsdr, limit/2, ZcoOutbound);
-
-		/*	By default, the occupancy ceiling is 50% more
-		 *	than the outbound ZCO allocation.		*/
-
-		iondbBuf.occupancyCeiling = zco_get_max_file_occupancy(ionsdr,
-				ZcoOutbound);
-		iondbBuf.occupancyCeiling += (limit/4);
-		iondbBuf.contacts = sdr_list_create(ionsdr);
-		iondbBuf.ranges = sdr_list_create(ionsdr);
-		iondbBuf.contactLog[0] = sdr_list_create(ionsdr);
-		iondbBuf.contactLog[1] = sdr_list_create(ionsdr);
-		iondbBuf.maxClockError = 0;
-		iondbBuf.clockIsSynchronized = 1;
-                memcpy(&iondbBuf.parmcopy, parms, sizeof(IonParms));
-		iondbObject = sdr_malloc(ionsdr, sizeof(IonDB));
-		if (iondbObject == 0)
-		{
-			sdr_cancel_xn(ionsdr);
-			putErrmsg("No space for database.", NULL);
-			return -1;
-		}
-
-		sdr_write(ionsdr, iondbObject, (char *) &iondbBuf,
-				sizeof(IonDB));
-		sdr_catlg(ionsdr, "iondb", 0, iondbObject);
-		if (sdr_end_xn(ionsdr))
-		{
-			putErrmsg("Can't create ION database.", NULL);
-			return -1;
-		}
-
-		break;
-
-	default:		/*	Found DB in the SDR.		*/
-		sdr_exit_xn(ionsdr);
-	}
-
-	oK(_iondbObject(&iondbObject));
-	oK(_ionConstants());
-
-	/*	Open ION shared-memory partition.			*/
-
-	ionwmParms.wmKey = parms->wmKey;
-	ionwmParms.wmSize = parms->wmSize;
-	ionwmParms.wmAddress = parms->wmAddress;
-	ionwmParms.wmName = ION_SM_NAME;
-	if (_ionwm(&ionwmParms) == NULL)
-	{
-		putErrmsg("ION memory configuration failed.", NULL);
-		return -1;
-	}
-
-	if (_ionvdb(&ionvdbName) == NULL)
-	{
-		putErrmsg("ION can't initialize vdb.", NULL);
-		return -1;
-	}
-
-	zco_register_callback(notify);
-	ionRedirectMemos();
-	ionRedirectWatchCharacters();
-#ifdef mingw
-	DWORD	threadId;
-	HANDLE	thread = CreateThread(NULL, 0, waitForSigterm, NULL, 0,
-			&threadId);
-	if (thread == NULL)
-	{
-		putErrmsg("Can't create sigterm thread.", utoa(GetLastError()));
-	}
-	else
-	{
-		CloseHandle(thread);
-	}
-#endif
-	return 0;
-}
 
 static void	destroyIonNode(PsmPartition partition, PsmAddress eltData,
 			void *argument)
@@ -897,15 +706,6 @@ int	ionAttach()
 		return 0;	/*	Already attached.		*/
 	}
 
-#ifdef mingw
-	if (_winsock(0) < 0)
-	{
-		return -1;
-	}
-
-	signal(SIGINT, SIG_IGN);
-#endif
-
 	if (sdr_initialize(0, NULL, SM_NO_KEY, NULL) < 0)
 	{
 		putErrmsg("Can't initialize the SDR system.", NULL);
@@ -995,19 +795,7 @@ int	ionAttach()
 	zco_register_callback(notify);
 	ionRedirectMemos();
 	ionRedirectWatchCharacters();
-#ifdef mingw
-	DWORD	threadId;
-	HANDLE	thread = CreateThread(NULL, 0, waitForSigterm, NULL, 0,
-			&threadId);
-	if (thread == NULL)
-	{
-		putErrmsg("Can't create sigterm thread.", utoa(GetLastError()));
-	}
-	else
-	{
-		CloseHandle(thread);
-	}
-#endif
+
 	return 0;
 }
 
@@ -1027,9 +815,6 @@ void	ionDetach()
 		ionsdr = NULL;		/*	To reset to NULL.	*/
 		oK(_ionsdr(&ionsdr));
 	}
-#ifdef mingw
-	oK(_winsock(1));
-#endif
 #endif	/*	end of #ifdef ION_LWT					*/
 }
 
@@ -1073,33 +858,6 @@ void	ionProd(uvast fromNode, uvast toNode, unsigned int xmitRate,
 
 	writeMemo("ionProd: contact inserted.");
 	writeMemo(rfx_print_contact(xaddr, textbuf));
-}
-
-void	ionEject()
-{
-	sdr_eject_xn(_ionsdr(NULL));
-}
-
-void	ionTerminate()
-{
-	Sdr		sdr = _ionsdr(NULL);
-	Object		obj = 0;
-	sm_WmParms	ionwmParms;
-	char		*ionvdbName = NULL;
-
-	if (sdr)
-	{
-		sdr_destroy(sdr);
-		sdr = NULL;
-		oK(_ionsdr(&sdr));	/*	To reset to NULL.	*/
-	}
-
-	oK(_iondbObject(&obj));
-	ionwmParms.wmKey = 0;
-	ionwmParms.wmSize = -1;
-	ionwmParms.wmAddress = NULL;
-	oK(_ionwm(&ionwmParms));
-	oK(_ionvdb(&ionvdbName));
 }
 
 Sdr	getIonsdr()
@@ -1161,164 +919,29 @@ int	ionClockIsSynchronized()
 	return iondbBuf.clockIsSynchronized;
 }
 
-/*	*	*	Shared-memory tracing 	*	*	*	*/
-
-int	startIonMemTrace(int size)
-{
-	return psm_start_trace(_ionwm(NULL), size, NULL);
-}
-
-void	printIonMemTrace(int verbose)
-{
-	psm_print_trace(_ionwm(NULL), verbose);
-}
-
-void	clearIonMemTrace(int verbose)
-{
-	psm_clear_trace(_ionwm(NULL));
-}
-
-void	stopIonMemTrace(int verbose)
-{
-	psm_stop_trace(_ionwm(NULL));
-}
 
 /*	*	*	Timestamp handling 	*	*	*	*/
-
-int	setDeltaFromUTC(int newDelta)
-{
-	Sdr	ionsdr = _ionsdr(NULL);
-	Object	iondbObject = _iondbObject(NULL);
-	IonVdb	*ionvdb = _ionvdb(NULL);
-	IonDB	iondb;
-
-	CHKERR(sdr_begin_xn(ionsdr));
-	sdr_stage(ionsdr, (char *) &iondb, iondbObject, sizeof(IonDB));
-	iondb.deltaFromUTC = newDelta;
-	sdr_write(ionsdr, iondbObject, (char *) &iondb, sizeof(IonDB));
-	if (sdr_end_xn(ionsdr) < 0)
-	{
-		putErrmsg("Can't change delta from UTC.", NULL);
-		return -1;
-	}
-
-	ionvdb->deltaFromUTC = newDelta;
-	return 0;
-}
 
 time_t	getUTCTime()
 {
 	IonVdb	*ionvdb = _ionvdb(NULL);
 	int	delta = ionvdb ? ionvdb->deltaFromUTC : 0;
 	time_t	clocktime;
-#if defined(FSWCLOCK)
-#include "fswutc.c"
-#else
+
 	clocktime = time(NULL);
-#endif
+
 	return clocktime - delta;
 }
 
-static time_t	readTimestamp(char *timestampBuffer, time_t referenceTime,
-			int timestampIsUTC)
-{
-	long		interval = 0;
-	time_t		result;
-	struct tm	ts;
-	int		count;
-
-	if (timestampBuffer == NULL)
-	{
-		return 0;
-	}
-
-	if (*timestampBuffer == '+')	/*	Relative time.		*/
-	{
-		interval = strtol(timestampBuffer + 1, NULL, 0);
-		result = referenceTime + interval;
-		if (result < 0 || result > MAX_POSIX_TIME)
-		{
-			putErrmsg("Time value not supported (must be before \
-19 January 2038).", timestampBuffer);
-			return 0;
-		}
-
-		return result;
-	}
-
-	memset((char *) &ts, 0, sizeof ts);
-	count = sscanf(timestampBuffer, timestampInFormat, &ts.tm_year,
-		&ts.tm_mon, &ts.tm_mday, &ts.tm_hour, &ts.tm_min, &ts.tm_sec);
-	if (count != 6)
-	{
-		putErrmsg("Timestamp format invalid.", timestampBuffer);
-		return 0;
-	}
-
-	ts.tm_year -= 1900;
-	ts.tm_mon -= 1;
-	ts.tm_isdst = 0;		/*	Default is UTC.		*/
-#ifndef VXWORKS
-#ifdef mingw
-	_tzset();	/*	Need to orient mktime properly.		*/
-#else
-	tzset();	/*	Need to orient mktime properly.		*/
-#endif
-	if (timestampIsUTC)
-	{
-		/*	Must convert UTC time to local time for mktime.	*/
-
-#if defined (freebsd)
-		ts.tm_sec -= ts.tm_gmtoff;
-#elif defined (RTEMS)
-		/*	RTEMS has no concept of time zones.		*/
-#elif defined (mingw)
-		ts.tm_sec -= _timezone;
-#else
-		ts.tm_sec -= timezone;
-#endif
-	}
-	else	/*	Local time already; may or may not be DST.	*/
-	{
-		ts.tm_isdst = -1;
-	}
-#endif
-	result = mktime(&ts);
-	if (result < 0 || result > MAX_POSIX_TIME)
-	{
-		putErrmsg("Time value not supported (must be before 19 January \
-2038).", timestampBuffer);
-		return 0;
-	}
-
-	return result;
-}
-
-time_t	readTimestampLocal(char *timestampBuffer, time_t referenceTime)
-{
-	return readTimestamp(timestampBuffer, referenceTime, 0);
-}
-
-time_t	readTimestampUTC(char *timestampBuffer, time_t referenceTime)
-{
-	return readTimestamp(timestampBuffer, referenceTime, 1);
-}
 
 void	writeTimestampLocal(time_t timestamp, char *timestampBuffer)
 {
-#if defined (mingw)
-	struct tm	*ts;
-#else
 	struct tm	tsbuf;
 	struct tm	*ts = &tsbuf;
-#endif
 
 	CHKVOID(timestampBuffer);
-#if defined (mingw)
-	ts = localtime(&timestamp);
-#else
 	oK(localtime_r(&timestamp, &tsbuf));
-#endif
+
 	isprintf(timestampBuffer, 20, timestampOutFormat,
 			ts->tm_year + 1900, ts->tm_mon + 1, ts->tm_mday,
 			ts->tm_hour, ts->tm_min, ts->tm_sec);
@@ -1326,19 +949,12 @@ void	writeTimestampLocal(time_t timestamp, char *timestampBuffer)
 
 void	writeTimestampUTC(time_t timestamp, char *timestampBuffer)
 {
-#if defined (mingw)
-	struct tm	*ts;
-#else
 	struct tm	tsbuf;
 	struct tm	*ts = &tsbuf;
-#endif
 
 	CHKVOID(timestampBuffer);
-#if defined (mingw)
-	ts = gmtime(&timestamp);
-#else
 	oK(gmtime_r(&timestamp, &tsbuf));
-#endif
+
 	isprintf(timestampBuffer, 20, timestampOutFormat,
 			ts->tm_year + 1900, ts->tm_mon + 1, ts->tm_mday,
 			ts->tm_hour, ts->tm_min, ts->tm_sec);
@@ -1403,279 +1019,8 @@ int	ionLocked()
 	return sdr_in_xn(_ionsdr(NULL));	/*	Boolean.	*/
 }
 
-/*	*	*	SDR configuration	*	*	*	*/
-
-int	readIonParms(char *configFileName, IonParms *parms)
-{
-	char	ownHostName[MAXHOSTNAMELEN + 1];
-	char	*endOfHostName;
-	char	configFileNameBuffer[PATHLENMAX + 1 + 9 + 1];
-	int	configFile;
-	char	buffer[512];
-	int	lineNbr;
-	char	line[256];
-	int	lineLength;
-	int	result;
-	char	*cursor;
-	int	i;
-	char	*tokens[2];
-	int	tokenCount;
-
-	/*	Set defaults.						*/
-
-	CHKERR(parms);
-	memset((char *) parms, 0, sizeof(IonParms));
-	parms->wmSize = 5000000;
-	parms->wmAddress = 0;		/*	Dyamically allocated.	*/
-	parms->configFlags = SDR_IN_DRAM | SDR_REVERSIBLE | SDR_BOUNDED;
-	parms->heapWords = 250000;
-	parms->heapKey = SM_NO_KEY;
-	parms->logSize = 0;		/*	Log is in file.		*/
-	parms->logKey = SM_NO_KEY;
-	istrcpy(parms->pathName, "/tmp", sizeof parms->pathName);
-
-	/*	Determine name of config file.				*/
-
-	if (configFileName == NULL || *configFileName == 0)
-	{
-		writeMemo("[i] admin pgm using default SDR parms.");
-		printIonParms(parms);
-		return 0;
-	}
-
-	if (strcmp(configFileName, ".") == 0)
-	{
-#ifdef ION_NO_DNS
-		ownHostName[0] = '\0';
-#else
-		if (getNameOfHost(ownHostName, MAXHOSTNAMELEN) < 0)
-		{
-			writeMemo("[?] Can't get name of local host.");
-			return -1;
-		}
-#endif
-		/*	Find end of high-order part of host name.	*/
-
-		if ((endOfHostName = strchr(ownHostName, '.')) != NULL)
-		{
-			*endOfHostName = 0;
-		}
-
-		isprintf(configFileNameBuffer, sizeof configFileNameBuffer,
-				"%.256s.ionconfig", ownHostName);
-		configFileName = configFileNameBuffer;
-	}
-
-	/*	Get overrides from config file.				*/
-
-	configFile = open(configFileName, O_RDONLY, 0777);
-	if (configFile < 0)
-	{
-		isprintf(buffer, sizeof buffer, "[?] admin pgm can't open SDR \
-config file '%.255s': %.64s", configFileName, system_error_msg());
-		writeMemo(buffer);
-		return -1;
-	}
-
-	isprintf(buffer, sizeof buffer, "[i] admin pgm using SDR parm \
-overrides from %.255s.", configFileName);
-	writeMemo(buffer);
-	lineNbr = 0;
-	while (1)
-	{
-		if (igets(configFile, line, sizeof line, &lineLength) == NULL)
-		{
-			if (lineLength == 0)
-			{
-				result = 0;
-				printIonParms(parms);
-			}
-			else
-			{
-				result = -1;
-				writeErrMemo("admin pgm SDR config file igets \
-failed");
-			}
-
-			break;			/*	Done.		*/
-		}
-
-		lineNbr++;
-		if (lineLength < 1)
-		{
-			continue;		/*	Empty line.	*/
-		}
-
-		if (line[0] == '#')		/*	Comment only.	*/
-		{
-			continue;
-		}
-
-		tokenCount = 0;
-		for (cursor = line, i = 0; i < 2; i++)
-		{
-			if (*cursor == '\0')
-			{
-				tokens[i] = NULL;
-			}
-			else
-			{
-				findToken((char **) &cursor, &(tokens[i]));
-				tokenCount++;
-			}
-		}
-
-		if (tokenCount != 2)
-		{
-			isprintf(buffer, sizeof buffer, "[?] incomplete SDR \
-configuration file line (%d).", lineNbr);
-			writeMemo(buffer);
-			result = -1;
-			break;
-		}
-
-		if (strcmp(tokens[0], "wmKey") == 0)
-		{
-			parms->wmKey = atoi(tokens[1]);
-			continue;
-		}
-
-		if (strcmp(tokens[0], "wmSize") == 0)
-		{
-			parms->wmSize = atoi(tokens[1]);
-			continue;
-		}
-
-		if (strcmp(tokens[0], "wmAddress") == 0)
-		{
-			parms->wmAddress = (char *) strtoaddr(tokens[1]);
-			continue;
-		}
-
-		if (strcmp(tokens[0], "sdrName") == 0)
-		{
-			istrcpy(parms->sdrName, tokens[1],
-					sizeof(parms->sdrName));
-			continue;
-		}
-
-		if (strcmp(tokens[0], "sdrWmSize") == 0)
-		{
-			parms->sdrWmSize = atoi(tokens[1]);
-			continue;
-		}
-
-		if (strcmp(tokens[0], "configFlags") == 0)
-		{
-			parms->configFlags = atoi(tokens[1]);
-			continue;
-		}
-
-		if (strcmp(tokens[0], "heapWords") == 0)
-		{
-			parms->heapWords = atoi(tokens[1]);
-			continue;
-		}
-
-		if (strcmp(tokens[0], "heapKey") == 0)
-		{
-			parms->heapKey = atoi(tokens[1]);
-			continue;
-		}
-
-		if (strcmp(tokens[0], "logSize") == 0)
-		{
-			parms->logSize = atoi(tokens[1]);
-			continue;
-		}
-
-		if (strcmp(tokens[0], "logKey") == 0)
-		{
-			parms->logKey = atoi(tokens[1]);
-			continue;
-		}
-
-		if (strcmp(tokens[0], "pathName") == 0)
-		{
-			istrcpy(parms->pathName, tokens[1],
-					sizeof(parms->pathName));
-			continue;
-		}
-
-		isprintf(buffer, sizeof buffer, "[?] unknown SDR config \
-keyword '%.32s' at line %d.", tokens[0], lineNbr);
-		writeMemo(buffer);
-		result = -1;
-		break;
-	}
-
-	close(configFile);
-	return result;
-}
-
-void	printIonParms(IonParms *parms)
-{
-	char	buffer[512];
-
-	CHKVOID(parms);
-	isprintf(buffer, sizeof buffer, "wmKey:           %d",
-			parms->wmKey);
-	writeMemo(buffer);
-	isprintf(buffer, sizeof buffer, "wmSize:          %ld",
-			parms->wmSize);
-	writeMemo(buffer);
-#if (SPACE_ORDER > 2 && defined(mingw))
-	isprintf(buffer, sizeof buffer, "wmAddress:       %#I64x",
-			(uaddr) (parms->wmAddress));
-#else
-	isprintf(buffer, sizeof buffer, "wmAddress:       %#lx",
-			(uaddr) (parms->wmAddress));
-#endif
-	writeMemo(buffer);
-	isprintf(buffer, sizeof buffer, "sdrName:        '%s'",
-			parms->sdrName);
-	writeMemo(buffer);
-	isprintf(buffer, sizeof buffer, "sdrWmSize:       %ld",
-			parms->sdrWmSize);
-	writeMemo(buffer);
-	isprintf(buffer, sizeof buffer, "configFlags:     %d",
-		       parms->configFlags);
-	writeMemo(buffer);
-	isprintf(buffer, sizeof buffer, "heapWords:       %ld",
-			parms->heapWords);
-	writeMemo(buffer);
-	isprintf(buffer, sizeof buffer, "heapKey:         %d",
-			parms->heapKey);
-	writeMemo(buffer);
-	isprintf(buffer, sizeof buffer, "logSize:         %d",
-			parms->logSize);
-	writeMemo(buffer);
-	isprintf(buffer, sizeof buffer, "logKey:          %d",
-			parms->logKey);
-	writeMemo(buffer);
-	isprintf(buffer, sizeof buffer, "pathName:       '%.256s'",
-			parms->pathName);
-	writeMemo(buffer);
-}
-
 /*	Functions for signaling the main threads of processes.	*	*/
 
-#ifdef mingw
-void	ionNoteMainThread(char *procName)
-{
-	return;		/*	Just for compatibility.			*/
-}
-
-void	ionPauseMainThread(int seconds)
-{
-	sm_WaitForWakeup(seconds);
-}
-
-void	ionKillMainThread(char *procName)
-{
-	sm_Wakeup(GetCurrentProcessId());
-}
-#else
 #define	PROC_NAME_LEN	16
 #define	MAX_PROCS	16
 
@@ -1747,35 +1092,8 @@ void	ionKillMainThread(char *procName)
 		pthread_kill(mainThread, SIGTERM);
 	}
 }
-#endif
 
 /*	Functions for flow-controlled ZCO space management.		*/
-
-int	ionStartAttendant(ReqAttendant *attendant)
-{
-	CHKERR(attendant);
-	attendant->semaphore = sm_SemCreate(SM_NO_KEY, SM_SEM_FIFO);
-	return (attendant->semaphore == SM_SEM_NONE ? -1 : 0);
-}
-
-void	ionPauseAttendant(ReqAttendant *attendant)
-{
-	CHKVOID(attendant);
-	sm_SemEnd(attendant->semaphore);
-}
-
-void	ionResumeAttendant(ReqAttendant *attendant)
-{
-	CHKVOID(attendant);
-	sm_SemUnend(attendant->semaphore);
-	sm_SemGive(attendant->semaphore);
-}
-
-void	ionStopAttendant(ReqAttendant *attendant)
-{
-	CHKVOID(attendant);
-	sm_SemDelete(attendant->semaphore);
-}
 
 void	ionShred(ReqTicket ticket)
 {
@@ -2149,158 +1467,4 @@ Object	ionCreateZco(ZcoMedium source, Object location, vast offset,
 	}
 
 	return zco;
-}
-
-vast	ionAppendZcoExtent(Object zco, ZcoMedium source, Object location,
-		vast offset, vast length, unsigned char coarsePriority,
-		unsigned char finePriority, ReqAttendant *attendant)
-{
-	Sdr		sdr = getIonsdr();
-	IonVdb		*vdb = _ionvdb(NULL);
-	vast		fileSpaceNeeded = 0;
-	vast		bulkSpaceNeeded = 0;
-	vast		heapSpaceNeeded = 0;
-	ReqTicket	ticket;
-	vast		result;
-
-	CHKERR(vdb);
-	CHKERR(location);
-	CHKERR(offset >= 0);
-	CHKERR(length > 0);
-	switch (source)
-	{
-	case ZcoFileSource:
-		fileSpaceNeeded = length;
-		break;
-
-	case ZcoBulkSource:
-		bulkSpaceNeeded = length;
-		break;
-
-	case ZcoSdrSource:	/*	Will become ZcoObjSource.	*/
-		heapSpaceNeeded = length;
-		break;
-
-	case ZcoZcoSource:
-		oK(sdr_begin_xn(sdr));
-		zco_get_aggregate_length(sdr, location, offset, length,
-			&fileSpaceNeeded, &bulkSpaceNeeded, &heapSpaceNeeded);
-		sdr_exit_xn(sdr);
-		break;
-
-	default:
-		putErrmsg("Invalid ZCO source type.", itoa((int) source));
-		return ERROR;
-	}
-
-	if (ionRequestZcoSpace(zco_acct(sdr, zco), fileSpaceNeeded,
-			bulkSpaceNeeded, heapSpaceNeeded, coarsePriority,
-			finePriority, attendant, &ticket) < 0)
-	{
-		putErrmsg("Failed on ionRequest.", NULL);
-		return ERROR;
-	}
-
-	if (ticket)	/*	Couldn't service request immediately.	*/
-	{
-		if (attendant == NULL)	/*	Non-blocking.		*/
-		{
-			ionShred(ticket);
-			return 0;	/*	No extent created.	*/
-		}
-
-		/*	Ticket is req list element for the request.	*/
-
-		if (sm_SemTake(attendant->semaphore) < 0)
-		{
-			putErrmsg("ionAppendZcoExtent can't take semaphore.",
-					NULL);
-			ionShred(ticket);
-			return ERROR;
-		}
-
-		if (sm_SemEnded(attendant->semaphore))
-		{
-			writeMemo("[i] ZCO extent creation interrupted.");
-			ionShred(ticket);
-			return 0;
-		}
-
-		/*	Request has been serviced; now create extent.	*/
-
-		ionShred(ticket);
-	}
-
-	/*	Pass additive inverse of length to zco_append_extent
-	 *	to indicate that space has already been awarded.	*/
-
-	oK(sdr_begin_xn(sdr));
-	result = zco_append_extent(sdr, zco, source, location, offset,
-			0 - length);
-	if (sdr_end_xn(sdr) < 0 || result == ERROR || result == 0)
-	{
-		putErrmsg("Can't create ZCO extent.", NULL);
-		return ERROR;
-	}
-
-	return result;
-}
-
-int	ionSendZcoByTCP(int *sock, Object zco, char *buffer, int buflen)
-{
-	Sdr		sdr = getIonsdr();
-	int		totalBytesSent = 0;
-	ZcoReader	reader;
-	uvast		bytesRemaining;
-	uvast		bytesToLoad;
-	int		bytesToSend;
-	int		bytesSent;
-
-	CHKERR(!(*sock < 0));
-	CHKERR(zco);
-	CHKERR(buffer);
-	CHKERR(buflen > 0);
-	zco_start_transmitting(zco, &reader);
-	zco_track_file_offset(&reader);
-	bytesRemaining = zco_length(sdr, zco);
-	while (bytesRemaining > 0)
-	{
-		CHKERR(sdr_begin_xn(sdr));
-		bytesToLoad = bytesRemaining;
-		if (bytesToLoad > buflen)
-		{
-			bytesToLoad = buflen;
-		}
-
-		bytesToSend = zco_transmit(sdr, &reader, bytesToLoad, buffer);
-		if (sdr_end_xn(sdr) < 0 || bytesToSend != bytesToLoad)
-		{
-			putErrmsg("Incomplete zco_transmit.", NULL);
-			return -1;
-		}
-
-		bytesSent = itcp_send(sock, buffer, bytesToSend);
-		switch (bytesSent)
-		{
-		case -1:
-			/*	Big problem; shut down.			*/
-
-			putErrmsg("Failed to send ZCO by TCP.", NULL);
-			return -1;
-
-		case 0:
-			/*	Just lost connection; treat as a
-			 *	transient anomaly, note the incomplete
-			 *	transmission.				*/
-
-			writeMemo("[?] TCP socket connection lost.");
-			return 0;
-
-		default:
-			totalBytesSent += bytesSent;
-			bytesRemaining -= bytesSent;
-		}
-	}
-
-	return totalBytesSent;
 }

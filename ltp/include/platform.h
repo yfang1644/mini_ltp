@@ -620,7 +620,6 @@ typedef void			(* Logger)(char *);
 typedef void			(* Watcher)(char);
 
 extern void			*acquireSystemMemory(size_t);
-extern int			createFile(const char*, int);
 extern char			*system_error_msg();
 extern void			setLogger(Logger);
 extern void			writeMemo(char *);
@@ -631,17 +630,13 @@ extern void			iwatch(char);
 extern void			snooze(unsigned int);
 extern void			microsnooze(unsigned int);
 extern void			getCurrentTime(struct timeval *);
-extern unsigned long		getClockResolution();	/*	usec	*/
 #if (defined(FSWLAN) || !(defined(ION_NO_DNS)))
 extern unsigned int		getInternetAddress(char *);
 extern char			*getInternetHostName(unsigned int, char *);
 extern int			getNameOfHost(char *, int);
 extern char			*getNameOfUser(char *);
 extern int			reUseAddress(int);
-extern int			watchSocket(int);
 #endif
-extern int			makeIoNonBlocking(int);
-extern void			closeOnExec(int);
 extern int			initResourceLock(ResourceLock *);
 extern void			killResourceLock(ResourceLock *);
 extern void			lockResource(ResourceLock *);
@@ -663,7 +658,6 @@ extern void			_putSysErrmsg(const char *, int, const char *,
 					const char *);
 extern int			getErrmsg(char *buffer);
 extern void			writeErrmsgMemos();
-extern void			discardErrmsgs();
 
 #define iEnd(arg)		_iEnd(__FILE__, __LINE__, arg)
 extern int			_iEnd(const char *, int, const char *);
@@ -728,12 +722,6 @@ extern int			parseSocketSpec(char *socketSpec,
 					unsigned int *ipAddress);
 extern void			printDottedString(unsigned int hostNbr,
 					char *buffer);
-
-extern int			itcp_connect(char *socketSpec,
-					unsigned short defaultPort, int *sock);
-extern int			itcp_send(int *sock, char *from, int length);
-extern int			itcp_recv(int *sock, char *into, int length);
-extern void			itcp_handleConnectionLoss();
 
 extern int			fullyQualified(char *fileName);
 extern int			qualifyFileName(char *fileName, char *buffer,

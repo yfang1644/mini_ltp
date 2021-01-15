@@ -338,10 +338,6 @@ extern void		ionProd(	uvast fromNode,
 					unsigned int owlt);
 extern void		ionTerminate();
 
-extern int		ionStartAttendant(ReqAttendant *attendant);
-extern void		ionPauseAttendant(ReqAttendant *attendant);
-extern void		ionResumeAttendant(ReqAttendant *attendant);
-extern void		ionStopAttendant(ReqAttendant *attendant);
 extern int		ionRequestZcoSpace(ZcoAcct acct,
 					vast fileSpaceNeeded,
 					vast bulkSpaceNeeded,
@@ -359,16 +355,6 @@ extern Object		ionCreateZco(	ZcoMedium source,
 					unsigned char finePriority,
 					ZcoAcct acct,
 					ReqAttendant *attendant);
-extern vast		ionAppendZcoExtent(Object zco,
-					ZcoMedium source,
-					Object location,
-					vast offset,
-					vast length,
-					unsigned char coarsePriority,
-					unsigned char finePriority,
-					ReqAttendant *attendant);
-extern int		ionSendZcoByTCP(int *sock, Object zco, char *buffer,
-					int buflen);
 
 extern Sdr		getIonsdr();
 extern Object		getIonDbObject();
@@ -378,21 +364,11 @@ extern IonVdb		*getIonVdb();
 extern char		*getIonWorkingDirectory();
 extern uvast		getOwnNodeNbr();
 
-extern int		startIonMemTrace(int size);
-extern void		printIonMemTrace(int verbose);
-extern void		clearIonMemTrace();
-extern void		stopIonMemTrace();
-
 #define	TIMESTAMPBUFSZ	20
 
-extern int		setDeltaFromUTC(int newDelta);
 extern time_t		getUTCTime();	/*	UTC scale, 1970 epoch.	*/
 extern int		ionClockIsSynchronized();
 
-extern time_t		readTimestampLocal(char *timestampBuffer,
-					time_t referenceTime);
-extern time_t		readTimestampUTC(char *timestampBuffer,
-					time_t referenceTime);
 extern void		writeTimestampLocal(time_t timestamp,
 					char *timestampBuffer);
 extern void		writeTimestampUTC(time_t timestamp,
@@ -414,10 +390,6 @@ extern int		_extractSmallSdnv(unsigned int *into,
 					int lineNbr);
 
 extern int		ionLocked();
-
-extern int		readIonParms(	char *configFileName,
-					IonParms *parms);
-extern void		printIonParms(	IonParms *parms);
 
 extern void		ionNoteMainThread(char *procName);
 extern void		ionPauseMainThread(int seconds);

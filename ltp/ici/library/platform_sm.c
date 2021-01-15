@@ -10,7 +10,7 @@
 /*	        Scott Burleigh, Jet Propulsion Laboratory		*/
 /*									*/
 
-#include <platform.h>
+#include "platform.h"
 
 static void	takeIpcLock();
 static void	giveIpcLock();

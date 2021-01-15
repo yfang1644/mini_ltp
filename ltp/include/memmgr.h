@@ -57,14 +57,6 @@ MemDeallocator	memmgr_release(	int mgrId);
 		/*	Returns the "release" function of this memory
 			manager.					*/
 
-MemAtoPConverter memmgr_AtoP(   int mgrId);
-		/*	Returns the "AtoP" function of this memory
-			manager.					*/
-
-MemPtoAConverter memmgr_PtoA(   int mgrId);
-		/*	Returns the "PtoA" function of this memory
-			manager.					*/
-
 int		memmgr_open(int memKey, long memSize, char **memPtr,
 			uaddr *smId, char *partitionName,
 			PsmPartition *partition, int *memMgr,

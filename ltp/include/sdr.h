@@ -48,17 +48,6 @@ Sdr_uncatlg(__FILE__, __LINE__, sdr, name)
 extern void		Sdr_uncatlg(const char *file, int line,
 				Sdr sdr, char *name);
 
-extern Object		sdr_read_catlg(Sdr sdr, char *name, int *type,
-				Object *object, Object previous_entry);
-			/*	Returns address of catalogue entry, a
-				list element; content of entry is
-				copied into name, type, object.  The
-				returned address can be supplied as
-				previous_entry in a subsequent
-				sdr_read_catlg call to get the
-				next entry in the catalog.  If
-				previous_entry is zero, first
-				catalogue entry is read.		*/
 #ifdef __cplusplus
 }
 #endif

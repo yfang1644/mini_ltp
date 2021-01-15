@@ -158,9 +158,7 @@ extern int		rfx_remove_alarm(PsmAddress alarmAddr);
 
 /*	*	Functions for controlling the rfxclock.			*/
 
-extern int		rfx_start();
 extern int		rfx_system_is_started();
-extern void		rfx_stop();
 
 /*	*	Additional database management functions.		*/
 

@@ -91,7 +91,7 @@ Object	Sdr_string_dup(const char *file, int line, Sdr sdrv, Object from)
 	}
 
 	sdrFetch(length, addr);
-	_sdrfetch(sdrv, (char *) (stringBuf + 1), addr + 1, length);
+	sdr_read(sdrv, (char *) (stringBuf + 1), addr + 1, length);
 	string = _sdrmalloc(sdrv, length + 1);
 	if (string == 0)
 	{
@@ -123,7 +123,7 @@ int	sdr_string_read(Sdr sdrv, char *into, Object string)
 	CHKERR(into);
 	CHKERR(string);
 	sdrFetch(length, addr);
-	_sdrfetch(sdrv, into, addr + 1, length);
+	sdr_read(sdrv, into, addr + 1, length);
 	*(into + length) = '\0';
 	return length;
 }

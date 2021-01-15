@@ -164,28 +164,6 @@ extern void	zco_destroy_file_ref(Sdr sdr,
 			 *	it is flagged for destruction as soon
 			 *	as the last reference to it is removed.	*/
 
-extern Object	zco_create_bulk_ref(Sdr sdr,
-				unsigned long item,
-				vast length,
-				ZcoAcct acct);
-			/*	The referenced item is automatically
-			 *	destroyed at the time that the last
-			 *	ZCO that cites this bulk reference is
-			 *	destroyed [normally upon delivery
-			 *	either down to the "ZCO transition
-			 *	layer" of the protocol stack or up to
-			 *	a ZCO-capable application].  Returns
-			 *	SDR heap location of bulk reference
-			 *	object on success, 0 on any error.	*/
-
-extern void	zco_destroy_bulk_ref(Sdr sdr,
-				Object bulkRef);
-			/*	If bulk reference is no longer in use
-			 *	(no longer referenced by any ZCO) then
-			 *	it is destroyed immediately.  Otherwise
-			 *	it is flagged for destruction as soon
-			 *	as the last reference to it is removed.	*/
-
 extern Object	zco_create_obj_ref(Sdr sdr,
 				Object object,
 				vast length,
@@ -404,34 +382,6 @@ extern int	zco_prepend_header(Sdr sdr,
 extern void	zco_discard_first_header(Sdr sdr,
 				Object zco);
 
-extern int	zco_append_trailer(Sdr sdr,
-				Object zco,
-				char *trailer,
-				vast length);
-
-extern void	zco_discard_last_trailer(Sdr sdr,
-				Object zco);
-
-extern Object	zco_header_text(Sdr sdr,
-				Object zco,
-				int skip,
-				vast *length);
-			/*	Skips over the first "skip" headers
-			 *	of the indicated ZCO and returns the
-			 *	address of the text of the next one,
-			 *	placing the length of that text in
-			 *	*length.  Returns 0 on any error.	*/
-
-extern Object	zco_trailer_text(Sdr sdr,
-				Object zco,
-				int skip,
-				vast *length);
-			/*	Skips over the first "skip" trailers
-			 *	of the indicated ZCO and returns the
-			 *	address of the text of the next one,
-			 *	placing the length of that text in
-			 *	*length.  Returns 0 on any error.	*/
-
 extern void	zco_destroy(	Sdr sdr,
 				Object zco);
 			/*	Explicitly destroys the indicated ZCO.
@@ -613,23 +563,6 @@ extern vast	zco_receive_trailers(Sdr sdr,
 			 *	of trailer data from ZCO extents into
 			 *	"buffer".  Returns number of bytes
 			 *	copied, or -1 on any error.		*/
-
-extern void	zco_strip(	Sdr sdr,
-				Object zco);
-			/*	Deletes all source data extents that
-			 *	contain only header or trailer data,
-			 *	adjusts offsets and/or lengths of
-			 *	remaining extents to exclude any
-			 *	known header or trailer data.  Use
-			 *	this function before concatenating
-			 *	with another ZCO, before starting
-			 *	the transmission of a ZCO that was
-			 *	received from an underlying protocol
-			 *	layer rather than from an overlying
-			 *	application or protocol layer, and
-			 *	before enqueuing the ZCO for reception
-			 *	by an overlying application or
-			 *	protocol layer.				*/
 
 #ifdef __cplusplus
 }

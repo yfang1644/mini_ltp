@@ -1906,30 +1906,6 @@ Address	sdr_address(Sdr sdrv, void *pointer)
 
 /*	*	Low-level I/O functions		*	*	*	*/
 
-#ifdef NO_SDRMGT
-
-Object	_sdrzalloc(Sdr sdrv, size_t nbytes)
-{
-	return 0;
-}
-
-Object	_sdrmalloc(Sdr sdrv, size_t nbytes)
-{
-	return 0;
-}
-
-void	_sdrfree(Sdr sdrv, Object, PutSrc);
-{
-	return;
-}
-
-int	sdrBoundaryViolated(SdrView *sdrv, Address offset, long length)
-{
-	return 0;
-}
-
-#endif
-
 static int	writeToLog(const char *file, int line, Sdr sdrv, char *from,
 			long length)
 {
@@ -2100,7 +2076,7 @@ void	Sdr_write(const char *file, int line, Sdr sdrv, Address into,
 	_sdrput(file, line, sdrv, into, from, length, UserPut);
 }
 
-void	_sdrfetch(Sdr sdrv, char *into, Address from, long length)
+void	sdr_read(Sdr sdrv, char *into, Address from, long length)
 {
 	SdrState	*sdr;
 	Address		to;
@@ -2143,9 +2119,4 @@ void	_sdrfetch(Sdr sdrv, char *into, Address from, long length)
 			}
 		}
 	}
-}
-
-void	sdr_read(Sdr sdrv, char *into, Address from, long length)
-{
-	_sdrfetch(sdrv, into, from, length);
 }

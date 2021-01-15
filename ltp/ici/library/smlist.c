@@ -168,64 +168,6 @@ int	Sm_list_destroy(const char *fileName, int lineNbr,
 	return wipeList(fileName, lineNbr, partition, list, deleteFn, arg, 1);
 }
 
-PsmAddress	sm_list_user_data(PsmPartition partition, PsmAddress list)
-{
-	SmList		*listBuffer;
-	PsmAddress	userData;
-
-	CHKZERO(partition);
-	CHKZERO(list);
-	listBuffer = (SmList *) psp(partition, list);
-	CHKZERO(listBuffer);
-	if (lockSmlist(listBuffer) == ERROR)
-	{
-		return 0;
-	}
-
-	userData = listBuffer->userData;
-	unlockSmlist(listBuffer);
-	return userData;
-}
-
-int	sm_list_user_data_set(PsmPartition partition, PsmAddress list,
-			PsmAddress data)
-{
-	SmList	*listBuffer;
-
-	CHKERR(partition);
-	CHKERR(list);
-	listBuffer = (SmList *) psp(partition, list);
-	CHKERR(listBuffer);
-	if (lockSmlist(listBuffer) == ERROR)
-	{
-		putErrmsg("Can't lock list.", NULL);
-		return -1;
-	}
-
-	listBuffer->userData = data;
-	unlockSmlist(listBuffer);
-	return 0;
-}
-
-int	sm_list_length(PsmPartition partition, PsmAddress list)
-{
-	SmList	*listBuffer;
-	int	length;
-
-	CHKERR(partition);
-	CHKERR(list);
-	listBuffer = (SmList *) psp(partition, list);
-	CHKERR(listBuffer);
-	if (lockSmlist(listBuffer) == ERROR)
-	{
-		putErrmsg("Can't lock list.", NULL);
-		return -1;
-	}
-
-	length = listBuffer->length;
-	unlockSmlist(listBuffer);
-	return length;
-}
 
 static PsmAddress	finishInsertingFirst(const char *fileName, int lineNbr,
 				PsmPartition partition, PsmAddress list,
@@ -642,115 +584,15 @@ PsmAddress	sm_list_next(PsmPartition partition, PsmAddress elt)
 	return eltBuffer->next;
 }
 
-PsmAddress	sm_list_prev(PsmPartition partition, PsmAddress elt)
+PsmAddress  sm_list_prev(PsmPartition partition, PsmAddress elt)
 {
-	SmListElt	*eltBuffer;
+    SmListElt   *eltBuffer;
 
-	CHKERR(partition);
-	CHKERR(elt);
-	eltBuffer = (SmListElt *) psp(partition, elt);
-	CHKERR(eltBuffer);
-	return eltBuffer->prev;
-}
-
-PsmAddress	sm_list_search(PsmPartition partition, PsmAddress fromElt,
-			SmListCompareFn compare, void *arg)
-{
-	SmListElt	*eltBuffer;
-	PsmAddress	list;
-	SmList		*listBuffer;
-	PsmAddress	elt;
-	int		result;
-
-	CHKZERO(partition);
-	if (fromElt == 0)
-	{
-		return 0;	/*	Obviously not found in list.	*/
-	}
-
-	CHKZERO(fromElt);
-	eltBuffer = (SmListElt *) psp(partition, fromElt);
-	CHKZERO(eltBuffer);
-	list = eltBuffer->list;
-	CHKZERO(list);
-	listBuffer = (SmList *) psp(partition, list);
-	CHKZERO(listBuffer);
-	if (lockSmlist(listBuffer) == ERROR)
-	{
-		return 0;
-	}
-
-	/*	Forward linear search starting at specified element.	*/
-
-	if (compare != (SmListCompareFn)NULL)
-	{
-		/*	Using user-specified comparison function, so
-			list is assumed to be in sorted order.  We
-			abandon the search as soon we're past any
-			possible match.					*/
-
-		elt = fromElt;
-		while (1)
-		{
-			result = compare(partition, eltBuffer->data, arg);
-			if (result > 0)	/*	past any possible match	*/
-			{
-				elt = 0;
-				break;
-			}
-
-			if (result == 0)	/*	found 1st match	*/
-			{
-				break;
-			}
-
-			elt = eltBuffer->next;
-			if (elt == 0)		/*	end of list	*/
-			{
-				break;
-			}
-
-			eltBuffer = (SmListElt *) psp(partition, elt);
-		}
-
-		unlockSmlist(listBuffer);
-		return elt;
-	}
-
-	/*	List is assumed to be unsorted.  We examine every
-		element of the list, until we either get an exact
-		"==" match or run out of elements.			*/
-
-	elt = fromElt;
-	while (1)
-	{
-		if (eltBuffer->data == (PsmAddress) arg)
-		{
-			break;
-		}
-
-		elt = eltBuffer->next;
-		if (elt == 0)		/*	end of list	*/
-		{
-			break;
-		}
-
-		eltBuffer = (SmListElt *) psp(partition, elt);
-	}
-
-	unlockSmlist(listBuffer);
-	return elt;
-}
-
-PsmAddress	sm_list_list(PsmPartition partition, PsmAddress elt)
-{
-	SmListElt	*eltBuffer;
-
-	CHKZERO(partition);
-	CHKZERO(elt);
-	eltBuffer = (SmListElt *) psp(partition, elt);
-	CHKZERO(eltBuffer);
-	return eltBuffer->list;
+    CHKERR(partition);
+    CHKERR(elt);
+    eltBuffer = (SmListElt *) psp(partition, elt);
+    CHKERR(eltBuffer);
+    return eltBuffer->prev;
 }
 
 PsmAddress	sm_list_data(PsmPartition partition, PsmAddress elt)
@@ -762,19 +604,4 @@ PsmAddress	sm_list_data(PsmPartition partition, PsmAddress elt)
 	eltBuffer = (SmListElt *) psp(partition, elt);
 	CHKZERO(eltBuffer);
 	return eltBuffer->data;
-}
-
-PsmAddress	sm_list_data_set(PsmPartition partition, PsmAddress elt,
-			PsmAddress new)
-{
-	SmListElt	*eltBuffer;
-	PsmAddress	old;
-
-	CHKZERO(partition);
-	CHKZERO(elt);
-	eltBuffer = (SmListElt *) psp(partition, elt);
-	CHKZERO(eltBuffer);
-	old = eltBuffer->data;
-	eltBuffer->data = new;
-	return old;
 }
